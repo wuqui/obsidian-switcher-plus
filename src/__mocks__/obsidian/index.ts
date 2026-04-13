@@ -19,6 +19,7 @@ import {
   MarkdownRenderer,
   prepareFuzzySearch,
   prepareSimpleSearch,
+  resolveSubpath,
   stripHeadingForLink,
 } from 'obsidian';
 import {
@@ -113,6 +114,8 @@ const mockStripHeadingForLink = mockFn<typeof stripHeadingForLink>().mockImpleme
   (heading) => heading,
 );
 
+const mockResolveSubpath = mockFn<typeof resolveSubpath>().mockReturnValue(null);
+
 // Mock parseYaml - returns undefined by default
 // Tests should override with mockReturnValue or mockImplementation as needed
 const mockParseYaml = mockFn<typeof parseYaml>();
@@ -133,6 +136,7 @@ export {
   mockParseLinktext as parseLinktext,
   mockParseYaml as parseYaml,
   mockStripHeadingForLink as stripHeadingForLink,
+  mockResolveSubpath as resolveSubpath,
   mockKeymap as Keymap,
   mockMarkdownRenderer as MarkdownRenderer,
   mockComponent as Component,

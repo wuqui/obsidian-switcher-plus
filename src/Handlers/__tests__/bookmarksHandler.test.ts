@@ -33,6 +33,7 @@ import {
   BookmarksPluginInstance,
   BookmarksPluginItem,
   BookmarksPluginFileItem,
+  resolveSubpath,
 } from 'obsidian';
 import { filenameFromPath, stripMDExtensionFromPath } from 'src/utils';
 
@@ -249,7 +250,12 @@ describe('bookmarksHandler', () => {
 
     sut.onChooseSuggestion(sugg, mockEvt);
 
-    expect(navigateSpy).toHaveBeenCalledWith(mockEvt, sugg.file, expect.any(String));
+    expect(navigateSpy).toHaveBeenCalledWith(
+      mockEvt,
+      sugg.file,
+      expect.any(String),
+      expect.anything(),
+    );
 
     navigateSpy.mockRestore();
   });
@@ -267,6 +273,13 @@ describe('bookmarksHandler', () => {
     const getFileCacheSpy = jest
       .spyOn(mockApp.metadataCache, 'getFileCache')
       .mockReturnValueOnce({ headings: [heading] });
+    const resolveSubpathMock = jest.mocked(resolveSubpath).mockReturnValueOnce({
+      type: 'heading',
+      current: heading,
+      next: null,
+      start: heading.position.start,
+      end: heading.position.end,
+    });
 
     sut.onChooseSuggestion(sugg, mockEvt);
 
@@ -293,6 +306,7 @@ describe('bookmarksHandler', () => {
 
     navigateSpy.mockRestore();
     getFileCacheSpy.mockRestore();
+    resolveSubpathMock.mockReset();
   });
 
   test('onChooseSuggestion() should open block bookmarks through navigateToLeafOrOpenFile', () => {
@@ -304,14 +318,23 @@ describe('bookmarksHandler', () => {
       start: makeLoc(11, 4, 250),
       end: makeLoc(11, 18, 264),
     };
+    const block = { id: 'bookmark-block', position };
 
     const navigateSpy = jest
       .spyOn(BookmarksHandler.prototype, 'navigateToLeafOrOpenFile')
       .mockReturnValueOnce();
-    const getFileCacheSpy = jest.spyOn(mockApp.metadataCache, 'getFileCache').mockReturnValueOnce({
-      blocks: {
-        'bookmark-block': { id: 'bookmark-block', position },
-      },
+    const getFileCacheSpy = jest
+      .spyOn(mockApp.metadataCache, 'getFileCache')
+      .mockReturnValueOnce({
+        blocks: {
+          'bookmark-block': block,
+        },
+      });
+    const resolveSubpathMock = jest.mocked(resolveSubpath).mockReturnValueOnce({
+      type: 'block',
+      block,
+      start: position.start,
+      end: position.end,
     });
 
     sut.onChooseSuggestion(sugg, mockEvt);
@@ -339,9 +362,10 @@ describe('bookmarksHandler', () => {
 
     navigateSpy.mockRestore();
     getFileCacheSpy.mockRestore();
+    resolveSubpathMock.mockReset();
   });
 
-  test('onChooseSuggestion() should fall back to opening the file when bookmark subpath cannot be resolved', () => {
+  test('onChooseSuggestion() should fall back to opening the file at the default position when bookmark subpath cannot be resolved', () => {
     const sugg = makeBookmarkedFileSuggestion({
       item: makeBookmarksPluginFileItem({ subpath: '#Missing heading' }),
     });
@@ -358,8 +382,48 @@ describe('bookmarksHandler', () => {
 
     sut.onChooseSuggestion(sugg, mockEvt);
 
-    expect(navigateSpy).toHaveBeenCalledWith(mockEvt, sugg.file, expect.any(String));
-    expect(navigateSpy.mock.calls[0]).toHaveLength(3);
+    expect(navigateSpy).toHaveBeenCalledWith(
+      mockEvt,
+      sugg.file,
+      expect.any(String),
+      expect.anything(),
+    );
+    expect(navigateSpy.mock.calls[0][3]).toMatchObject({
+      active: true,
+      eState: {
+        active: true,
+        focus: true,
+        line: 0,
+      },
+    });
+
+    navigateSpy.mockRestore();
+    getFileCacheSpy.mockRestore();
+  });
+
+  test('onChooseSuggestion() should fall back to opening the file at the default position when the file has no metadata cache', () => {
+    const sugg = makeBookmarkedFileSuggestion({
+      item: makeBookmarksPluginFileItem({ subpath: '#Heading' }),
+    });
+    const mockEvt = mock<KeyboardEvent>();
+
+    const navigateSpy = jest
+      .spyOn(BookmarksHandler.prototype, 'navigateToLeafOrOpenFile')
+      .mockReturnValueOnce();
+    const getFileCacheSpy = jest
+      .spyOn(mockApp.metadataCache, 'getFileCache')
+      .mockReturnValueOnce(null);
+
+    sut.onChooseSuggestion(sugg, mockEvt);
+
+    expect(navigateSpy.mock.calls[0][3]).toMatchObject({
+      active: true,
+      eState: {
+        active: true,
+        focus: true,
+        line: 0,
+      },
+    });
 
     navigateSpy.mockRestore();
     getFileCacheSpy.mockRestore();
