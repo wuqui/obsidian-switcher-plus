@@ -21,6 +21,8 @@ import {
   BookmarksPluginFileItem,
   BookmarksPluginGroupItem,
   MetadataCache,
+  Pos,
+  resolveSubpath,
 } from 'obsidian';
 import { Handler } from './handler';
 import { BOOKMARKS_FACET_ID_MAP, SwitcherPlusSettings } from 'src/settings';
@@ -122,17 +124,45 @@ export class BookmarksHandler extends Handler<BookmarksSuggestion> {
     let handled = false;
     if (BookmarksHandler.isBookmarksPluginFileItem(sugg?.item)) {
       const { file } = sugg;
+      const errorContext = `Unable to open file from BookmarkSuggestion ${file?.path}`;
+      const openState = this.getOpenViewState(sugg);
 
-      this.navigateToLeafOrOpenFile(
-        evt,
-        file,
-        `Unable to open file from BookmarkSuggestion ${file?.path}`,
-      );
+      this.navigateToLeafOrOpenFile(evt, file, errorContext, openState);
 
       handled = true;
     }
 
     return handled;
+  }
+
+  override getPreferredViewLinePosition(sugg?: BookmarksSuggestion): Pos {
+    if (sugg && BookmarksHandler.isBookmarksPluginFileItem(sugg.item)) {
+      const position = this.getBookmarkSubpathPosition(sugg.file, sugg.item.subpath);
+      if (position) {
+        return position;
+      }
+    }
+
+    return super.getPreferredViewLinePosition(sugg);
+  }
+
+  getBookmarkSubpathPosition(file: TFile, subpath?: string): Pos | null {
+    if (!subpath) {
+      return null;
+    }
+
+    const fileCache = this.app.metadataCache.getFileCache(file);
+    const resolved = fileCache ? resolveSubpath(fileCache, subpath) : null;
+
+    if (resolved?.type === 'block') {
+      return resolved.block.position;
+    }
+
+    if (resolved?.type === 'heading') {
+      return resolved.current.position;
+    }
+
+    return null;
   }
 
   getPreferredTitle(
