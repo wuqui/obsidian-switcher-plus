@@ -21,6 +21,9 @@ import {
   BookmarksPluginFileItem,
   BookmarksPluginGroupItem,
   MetadataCache,
+  OpenViewState,
+  Pos,
+  stripHeadingForLink,
 } from 'obsidian';
 import { Handler } from './handler';
 import { BOOKMARKS_FACET_ID_MAP, SwitcherPlusSettings } from 'src/settings';
@@ -122,31 +125,56 @@ export class BookmarksHandler extends Handler<BookmarksSuggestion> {
     let handled = false;
     if (BookmarksHandler.isBookmarksPluginFileItem(sugg?.item)) {
       const { file, item } = sugg;
+      const errorContext = `Unable to open file from BookmarkSuggestion ${file?.path}`;
+      const openState = this.getBookmarkOpenViewState(file, item.subpath);
 
-      if (item.subpath) {
-        const { navType } = this.extractTabNavigationType(evt);
-        const linkText = `${file.path}${item.subpath}`;
-
-        this.app.workspace
-          .openLinkText(linkText, file.path, navType, { active: true })
-          .catch((err) => {
-            console.log(
-              `Switcher++: Unable to open bookmark deep link ${item.subpath} in file ${file?.path}`,
-              err,
-            );
-          });
+      if (openState) {
+        this.navigateToLeafOrOpenFile(evt, file, errorContext, openState);
       } else {
-        this.navigateToLeafOrOpenFile(
-          evt,
-          file,
-          `Unable to open file from BookmarkSuggestion ${file?.path}`,
-        );
+        this.navigateToLeafOrOpenFile(evt, file, errorContext);
       }
 
       handled = true;
     }
 
     return handled;
+  }
+
+  getBookmarkOpenViewState(file: TFile, subpath?: string): OpenViewState | null {
+    const position = this.getBookmarkSubpathPosition(file, subpath);
+
+    if (!position) {
+      return null;
+    }
+
+    const activeState = this.getOpenViewActiveState();
+    const { eState } = this.getOpenViewLinePositionState(position);
+    Object.assign(activeState.eState, eState);
+
+    return activeState;
+  }
+
+  getBookmarkSubpathPosition(file: TFile, subpath?: string): Pos | null {
+    const fileCache = this.app.metadataCache.getFileCache(file);
+
+    if (!fileCache || !subpath) {
+      return null;
+    }
+
+    if (subpath.startsWith('#^')) {
+      return fileCache.blocks?.[subpath.slice(2)]?.position ?? null;
+    }
+
+    if (subpath.startsWith('#')) {
+      const headingSlug = subpath.slice(1);
+      const heading = fileCache.headings?.find((entry) => {
+        return stripHeadingForLink(entry.heading) === headingSlug;
+      });
+
+      return heading?.position ?? null;
+    }
+
+    return null;
   }
 
   getPreferredTitle(
